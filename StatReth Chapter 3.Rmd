@@ -1,0 +1,15 @@
+---
+title: "StatReth Exercises"
+output: pdf_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+## Chapter 3
+
+```{r}
+
+```
+
