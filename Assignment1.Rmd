@@ -643,22 +643,33 @@ ggplot(d_newD, aes(grid, posterior_newD)) + geom_point() + geom_line() + theme_c
 
 ggplot(d_newM, aes(grid, posterior_newM)) + geom_point() + geom_line() + theme_classic() + geom_line(aes(grid, prior_newM/dens), colour='red') + xlab("Knowledge of CogSci - Mikkel updated") + ylab("posterior probability")
 
+
+```
+
+## Posterior predictions - sampling from posterior distribution to create predictions.
+
+```{r}
+
 library(dplyr)
+
+# Create an object named samples_XX (because this function samples) <- specify dataframe that contains the posterior distribution you want to use - pipes - 'dplyr::slice_sample()' samples - specify the amount of samples you want, "weight_by= posterior" - we want it the sample proportionate to the posterior distribution. "replace = TRUE" - just because.
 
 samples_ric <- d_newR %>% 
   dplyr::slice_sample(n = 1e4, weight_by = posterior, replace = TRUE)
 # Samples of the parameter (weighted_by= posterior (i.e taking more samples from where the posterior density is tall - proportional to the posterior density))
 
+
+# Extract the mean and standard deviation (SD) of the grid in the samples_object. 
 mean(samples_ric$grid)
 sd(samples_ric$grid)
 ```
  
 ```{r}
-# create an object with a name - make a tibble (you can also make dataframe) - writing "predictions" before rbinom() names the sample column 'predictions'
-predictive_post <- tibble(predictions = rbinom(1e4, 10, prob= rnorm( 1e4, 0.743, 0.088))) %>%
+# create an object with a name - make a tibble (you can also make dataframe) - writing "predictions=" before rbinom() names the sample column 'predictions' - we want it to sample from the posterior distribution (with the same proportions as the posterior distributions) - rbinom() - takes n samples. "size = 10" - how many questions were asked. "prob = rnorm(sample amount, mean, SD) - mean and SD were extracted above.
+predictive_post <- tibble(predictions = rbinom( n = 1e4, size = 10, prob= rnorm( 1e4, 0.743, 0.088))) %>%
   filter(!is.na(predictions)) #Remove NA's
 
-# Making histogram
+# Making histogram (this only needs the x-axis)
 ggplot(predictive_post, aes(x = predictions)) + geom_histogram()
 
 
@@ -666,6 +677,12 @@ ggplot(predictive_post, aes(x = predictions)) + geom_histogram()
 
 ```
  
+```{r}
+
+```
 
 
+```{r}
+
+```
 
