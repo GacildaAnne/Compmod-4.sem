@@ -643,6 +643,25 @@ ggplot(d_newD, aes(grid, posterior_newD)) + geom_point() + geom_line() + theme_c
 
 ggplot(d_newM, aes(grid, posterior_newM)) + geom_point() + geom_line() + theme_classic() + geom_line(aes(grid, prior_newM/dens), colour='red') + xlab("Knowledge of CogSci - Mikkel updated") + ylab("posterior probability")
 
+library(dplyr)
+
+samples_ric <- d_newR %>% 
+  dplyr::slice_sample(n = 1e4, weight_by = posterior, replace = TRUE)
+# Samples of the parameter (weighted_by= posterior (i.e taking more samples from where the posterior density is tall - proportional to the posterior density))
+
+mean(samples_ric$grid)
+sd(samples_ric$grid)
+```
+ 
+```{r}
+# create an object with a name - make a tibble (you can also make dataframe) - writing "predictions" before rbinom() names the sample column 'predictions'
+predictive_post <- tibble(predictions = rbinom(1e4, 10, prob= rnorm( 1e4, 0.743, 0.088))) %>%
+  filter(!is.na(predictions)) #Remove NA's
+
+# Making histogram
+ggplot(predictive_post, aes(x = predictions)) + geom_histogram()
+
+
 
 
 ```
