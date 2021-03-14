@@ -125,6 +125,8 @@ conditional_effects(altercentric_m2)
 plot(conditional_effects(altercentric_m2),points = T)
 
 
+
+
 ```
 
 
@@ -336,6 +338,85 @@ plot(hypothesis(MRaVH_m, "MindReading > 0"))
 hypothesis(MRaVH_m, "MindReading > 0")
 conditional_effects(MRaVH_m)
 plot(conditional_effects(MRaVH_m), points=T)
+
+
+
+
+#####ALL SYMPTOMS####
+All <- bf(
+  AltercentricIntrusion ~ 1 + VoiceHearing + MindReading + Apathy
+)
+# Creating prior
+priorAll <- c(
+  prior(normal(0, 1), class = Intercept),
+  prior(normal(0, 0.3), class = b),
+  prior(normal(1, 2), class = sigma)
+) 
+
+
+#Testing the prior
+All_priorcheck <- brm(
+  formula = All,
+  data = scz,
+  family = gaussian,
+  prior = priorAll,
+  sample_prior = "only"  
+)
+ 
+pp_check(All_priorcheck, nsamples =100) 
+
+
+
+#testing the actual model
+All_m <- brm(
+  formula = All,
+  data = scz,
+  family = gaussian,
+  prior = priorAll,
+  sample_prior = T  
+)
+# Posterior predictive check
+pp_check(All_m, nsamples = 100)
+## Check the model for warnings
+All_m
+
+# Hypothesis testing for voice hearing
+plot(hypothesis(All_m, "VoiceHearing > 0"))
+hypothesis(All_m, "VoiceHearing > 0")
+
+# Hypothesis testing for mind reading
+plot(hypothesis(All_m, "MindReading > 0"))
+hypothesis(All_m, "MindReading > 0")
+
+# Hypothesis testing for Apathy
+plot(hypothesis(All_m, "Apathy > 0"))
+hypothesis(All_m, "Apathy < 0")
+
+conditional_effects(All_m)
+plot(conditional_effects(All_m), points=T)
+
+
+
+#####COMPARING THE MODELS#####
+?add_criterion()
+VH_cri <- brms::add_criterion(VH_m, criterion = "loo")
+MR_cri <- brms::add_criterion(MR_m, criterion = "loo")
+Apathy_cri <- brms::add_criterion(Apathy_m, criterion = "loo")
+MRaVH_cri <- brms::add_criterion(MRaVH_m, criterion = "loo")
+All_cri <- brms::add_criterion(All_m, criterion = "loo")
+
+
+brms::loo_compare(VH_cri,
+                  MR_cri,
+                  Apathy_cri,
+                  MRaVH_cri,
+                  All_cri)
+
+brms::loo_model_weights(VH_cri,
+                  MR_cri,
+                  Apathy_cri,
+                  MRaVH_cri,
+                  All_cri)
 
 
 ```
