@@ -204,11 +204,14 @@ ggplot(Data, aes(std_pitchIQR)) + geom_density()
 
 ```
 ```{r}
+
 # get prior
 get_prior(formula0, Data, family = gaussian)
-
 # Skeptic prior for model0
-prior$prior[1] <- "normal(-0.3, 1)"
+prior <- c(
+  prior(normal(-0.3, 0.1), class = b),
+  prior(normal(-0.3,0.1), class =sd),
+  prior(normal(-0.3, 0.1), class = sigma))
 
 # Testing the prior ?
 model0 <- brm(
@@ -218,7 +221,6 @@ model0 <- brm(
   prior = prior,
   sample_prior = "only"
 )
-
 # Prior predictive check
 pp_check(model0, nsamples = 100)
 
@@ -237,6 +239,11 @@ Model0 <- brm(
 pp_check(Model0, nsamples = 100)
 
 summary(Model0)
+plot(hypothesis(Model0, "DiagnosisTD < 0"))
+hypothesis(Model0, "DiagnosisTD < 0")
+plot(hypothesis(Model0, "DiagnosisASD < 0"))
+hypothesis(Model0, "DiagnosisASD < 0")
+
 
 
 # Now try with formula1
@@ -244,8 +251,16 @@ summary(Model0)
 # get prior
 get_prior(formula1, Data, family = gaussian)
 
-# Skeptic prior for model1
-prior1$prior[1] <- "normal(-0.3, 1)"  
+# Define prior
+prior1 <- c(
+  prior(normal(-0.3, .1), class = b, coef = "DiagnosisASD"),
+  prior(normal(-0.3, .1), class = b, coef = "DiagnosisASD:Languageus"),
+  prior(normal(-0.3, .1), class = b, coef = "DiagnosisTD"),
+  prior(normal(-0.3, .1), class = b, coef = "DiagnosisTD:Languageus"),
+  prior(normal(-0.3, .1), class = sd),
+  prior(normal(-0.3, .1), class = sigma)
+)
+  
 
 # Testing the prior ?
 model1 <- brm(
@@ -274,7 +289,10 @@ Model1 <- brm(
 pp_check(Model1, nsamples = 100)
 
 summary(Model1)
-
+plot(hypothesis(Model1, "DiagnosisTD < 0"))
+hypothesis(Model1, "DiagnosisTD < 0")
+plot(hypothesis(Model1, "DiagnosisASD < 0"))
+hypothesis(Model1, "DiagnosisASD < 0")
 
 
 ```
@@ -336,7 +354,15 @@ Meta_Model <- brm(
 pp_check(Meta_Model, nsamples = 100)
 
 summary(Meta_Model)
+plot(hypothesis(Model1, "DiagnosisTD < 0"))
+hypothesis(Model1, "DiagnosisTD < 0")
+plot(hypothesis(Model1, "DiagnosisASD < 0"))
+hypothesis(Model1, "DiagnosisASD < 0")
 
+plot(hypothesis(Model1, "DiagnosisTD:Languageus < 0"))
+hypothesis(Model1, "DiagnosisTD:Languageus < 0")
+plot(hypothesis(Model1, "DiagnosisASD:Languageus < 0"))
+hypothesis(Model1, "DiagnosisASD:Languageus < 0")
 ```
 ```{r}
 
