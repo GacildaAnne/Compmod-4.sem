@@ -7,6 +7,239 @@ output: pdf_document
 knitr::opts_chunk$set(echo = TRUE)
 ```
 
-## Load data
+## My study
+XXXX Write about the study here XXXX
+
+
+# Load data
+```{r}
+# Load packages
+library(brms)
+library(tidyverse)
+library(cmdstanr)
+library(rethinking)
+library(rstan)
+library(ggplot2)
+library(knitr)
+library(kableExtra)
+library(metafor)
+library(scales)
+library(lme4)
+library(tidyr)
+library(data.table)
+library(plyr)
+
+```
+
+
+
+
+```{r}
+
+# Load data from Danish experiment (information from survey)
+data <- read.csv("EXAMDATA/data.csv")
+
+# Change the rownames
+data <- cbind(rownames(data), data.frame(data, row.names=NULL))
+
+# Change column names accordingly
+names(data)[1] <- "Participant"
+names(data)[2] <- "Name"
+names(data)[3] <- "Age"
+names(data)[4] <- "Ethnicity"
+names(data)[5] <- "OtherEthnicity"
+names(data)[6] <- "Gender"
+names(data)[7] <- "GenderOther"
+names(data)[8] <- "ProfileName"
+names(data)[9] <- "Experiment"
+names(data)[10] <- "TIME_start"
+names(data)[11] <- "TIME_end"
+names(data)[12] <- "TIME_total"
+names(data)[13] <- "extra"
+
+# Load data from English experiment (information from survey)
+data1 <- read.csv("EXAMDATA/data1.csv")
+
+# Change the rownames
+data1 <- cbind(rownames(data1), data.frame(data1, row.names=NULL))
+
+# Change column names accordingly
+names(data1)[1] <- "Participant"
+names(data1)[2] <- "Name"
+names(data1)[3] <- "Age"
+names(data1)[4] <- "Ethnicity"
+names(data1)[5] <- "OtherEthnicity"
+names(data1)[6] <- "Gender"
+names(data1)[7] <- "GenderOther"
+names(data1)[8] <- "ProfileName"
+names(data1)[9] <- "Experiment"
+names(data1)[10] <- "TIME_start"
+names(data1)[11] <- "TIME_end"
+names(data1)[12] <- "TIME_total"
+names(data1)[13] <- "extra"
+
+# Use rbind() to unite the datasets into one
+Data <- rbind(data, data1)
+
+# Choose only the relevant variables (we also take the TIME_total column to remove incomplete data afterwards)
+Data <- subset(Data, select = c(Participant, Name, Age, Ethnicity, OtherEthnicity, Gender, Experiment, TIME_total))
+
+# Remove participants who did not complete the experiment
+Data <- Data[complete.cases(Data), ]
+
+# Remove Christin Stephanie (the same participant ran the experiment twice) 
+Data <- subset(Data, Name!=" Christin Stephanie" )
+
+# Remove participants younger or older than 18-30 
+Data <- Data %>% 
+  filter(
+    Age >= 18 & Age <= 30
+    )
+
+# Remove the TIME_total column and remove names for anonymity
+Data$TIME_total <- NULL
+Data$Name <- NULL
+
+
+# Now load the txt files (data of experiment)
+files = list.files(pattern = "*.txt")
+
+DT <- rbindlist(sapply(files, fread, simplify = FALSE),
+                use.names = TRUE, idcol = "FileName")
+
+# Change column names
+colnames(DT) <- c("Participant", "Question", "extra", "extra2", "Answer")
+
+# Remove columns I do not need
+DT$extra <- NULL
+DT$extra2 <- NULL
+
+# Merge dataframes to one
+df <- merge(Data, DT, by.x = "Experiment", by.y = "Participant")
+
+# Remove participant variable - it is not needed
+df$Participant <- NULL
+
+#Add column called ID
+df$ID <- rep(1:21, each=10)
+
+
+# Change string in Question to numbers
+df$Question <- ifelse(df$Question == "one", 1 , ifelse(df$Question == "two", 2, ifelse(df$Question == "three", 3, ifelse(df$Question == "four", 4, ifelse(df$Question == "five", 5, ifelse(df$Question == "six", 6, ifelse(df$Question == "seven", 7, ifelse(df$Question == "eight", 8, ifelse(df$Question == "nine", 9, ifelse(df$Question == "ten", 10, 0)))))))))) 
+
+# Change row order
+df <- arrange(df, Question)   
+
+# Add column with experiment language
+df$Language <- ifelse(grepl("D", df$Experiment), "Danish", "English")
+
+# Fill in Ethnicity (1 = Denmark) and remove OtherEthnicity
+df$Ethnicity <- ifelse(df$Ethnicity == 1, "Denmark", df$OtherEthnicity)
+df$OtherEthnicity <- NULL
+
+# Add column with condition (type of question - 1 = math, 2 = scenario)
+df$Condition <- ifelse(df$Question >= 6, 2, 1)
+
+# Add columns with ages of other profiles for each question
+qa1 <- c(15, 52, 52, 59, 50, 39, 36, 28, 16, 20)
+qa2 <- c(29, 46, 48, 43, 21, 33, 14, 31, 57, 49)
+qa3 <- c(23, 13, 26, 54, 35, 22, 44, 54, 17, 37)
+
+df$P1 <- rep(qa1, each = 21)
+df$P2 <- rep(qa2, each = 21)
+df$P3 <- rep(qa3, each = 21)
+
+# Add column with correct answer for type 1
+ca <- c(1, 3, 2, 4, 3)
+df$CorrectAnswer <- ifelse(df$Question <= 5, rep(ca, each=21), NA)
+
+# Add column with value of 0 if participant was incorrect and 1 if correct
+df$Correct <- ifelse(df$Answer == df$CorrectAnswer, 1, 0)
+
+# Add column with social influence from profiles (what other profiles chose)
+si1 <- c(1, 1, 2, 3, 1, 1, 4, 2, 4, 2)
+si2 <- c(1, 3, 2, 3, 3, 1, 2, 3, 3, 3)
+si3 <- c(1, 3, 4, 3, 1, 2, 4, 1, 4, 2)
+
+df$SI1 <- rep(si1, each = 21)
+df$SI2 <- rep(si2, each = 21)
+df$SI3 <- rep(si3, each = 21)
+
+# Add column to indicate whether profile was correct
+pcor1 <- c(1, 0, 1, 0, 0)
+pcor2 <- c(1, 1, 1, 0, 1)
+pcor3 <- c(1, 1, 0, 0, 0)
+
+df$P1cor <- ifelse(df$Question <= 5, rep(pcor1, each=21), NA)
+df$P2cor <- ifelse(df$Question <= 5, rep(pcor2, each=21), NA)
+df$P3cor <- ifelse(df$Question <= 5, rep(pcor3, each=21), NA)
+
+# Add column with Pncon to indicate whether the profiles answered the same as participant
+df$P1con <- ifelse(df$Answer == df$SI1, 1, 0)
+df$P2con <- ifelse(df$Answer == df$SI2, 1, 0)
+df$P3con <- ifelse(df$Answer == df$SI3, 1, 0)
+
+# Add column to indicate "congruency" (how many profiles answered the same as the particpant)
+df$Congruency <- df$P1con + df$P2con + df$P3con
+
+# Add column with age difference between the participant and the profiles
+df$AgeDif1 <- df$P1 - df$Age
+df$AgeDif2 <- df$P2 - df$Age
+df$AgeDif3 <- df$P3 - df$Age
+
+## Now the dataset is finished and contains all the variables I need ##
+ 
+```
+
+- plots
+
+- Formulas
+
+- Get prior
+- Define prior
+- Define model
+- Prior Predictive check
+- Build the actual model
+- Posterior Predictive check (see if the model has learnt from the data? The posterior predictive check: whether the simulated values created by following the model look similar to the values of the observed data. )
+
+- Compare models using LOO, AIC, stacking weight?
+
+
+
+```{r}
+
+# Descriptive analysis of participants
+
+# How many participants? - 21
+
+# Gender distribution
+count(Data$Gender) 
+
+
+# Age distribution
+count(Data$Age) 
+mean(Data$Age)
+sd(Data$Age)
+
+
+# Ethnicity
+
+
+
+df$Correct <- as.factor(df$Correct)
+
+ggplot(df, aes(Question, fill = Correct)) +
+  geom_histogram()
+
+
+```
+21 participants, 11 males, 10 females, from age 20 to 30, mean age: 22.6, SD(age): 2.6.
+Only participants who completed the full experiment were included. 
+
+```{r}
+
+
+
+```
 
 
