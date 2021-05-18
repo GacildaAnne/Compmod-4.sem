@@ -8,10 +8,17 @@ knitr::opts_chunk$set(echo = TRUE)
 ```
 
 ## My study
-XXXX Write about the study here XXXX
+This markdown is for the analysis of the data collected for my Social and Cultural dynamics exam project.
+
+The study is about social conformity in young adults and which age groups they conform to. 
+The data was collected using an online experiment coded in Psytoolkit, and the experiment consisted of 10 questions of two types (condition 1 (question 1-5) = math questions, condition 2 (question 6-10) = public scenarios). The experiment was available for the participants both in English and Danish.
+
+Hypothesis 1:
+
+Hypothesis 2:
 
 
-# Load data
+
 ```{r}
 # Load packages
 library(brms)
@@ -28,11 +35,12 @@ library(lme4)
 library(tidyr)
 library(data.table)
 library(plyr)
+library(reshape)
+library(reshape2)
 
 ```
 
-
-
+# Preprocessing of data - loading data into a dataframe and adding the wanted columns/variables
 
 ```{r}
 
@@ -100,6 +108,17 @@ Data <- Data %>%
 Data$TIME_total <- NULL
 Data$Name <- NULL
 
+# Fill in Ethnicity (1 = Denmark) and remove OtherEthnicity
+Data$Ethnicity <- ifelse(Data$Ethnicity == 1, "Denmark", Data$OtherEthnicity)
+
+
+# Add column with experiment language
+Data$Language <- ifelse(grepl("D", Data$Experiment), "Danish", "English")
+
+# Change gender to factor and change them into 1 = male, 0 = female
+class(Data$Gender)
+Data$Gender <- as.factor(Data$Gender)
+Data$Gender <- ifelse(Data$Gender==2,0,1)
 
 # Now load the txt files (data of experiment)
 files = list.files(pattern = "*.txt")
@@ -127,14 +146,11 @@ df$ID <- rep(1:21, each=10)
 # Change string in Question to numbers
 df$Question <- ifelse(df$Question == "one", 1 , ifelse(df$Question == "two", 2, ifelse(df$Question == "three", 3, ifelse(df$Question == "four", 4, ifelse(df$Question == "five", 5, ifelse(df$Question == "six", 6, ifelse(df$Question == "seven", 7, ifelse(df$Question == "eight", 8, ifelse(df$Question == "nine", 9, ifelse(df$Question == "ten", 10, 0)))))))))) 
 
-# Change row order
+# Change row order of Questions
 df <- arrange(df, Question)   
 
-# Add column with experiment language
-df$Language <- ifelse(grepl("D", df$Experiment), "Danish", "English")
 
-# Fill in Ethnicity (1 = Denmark) and remove OtherEthnicity
-df$Ethnicity <- ifelse(df$Ethnicity == 1, "Denmark", df$OtherEthnicity)
+# Remove OtherEthnicity
 df$OtherEthnicity <- NULL
 
 # Add column with condition (type of question - 1 = math, 2 = scenario)
@@ -149,7 +165,7 @@ df$P1 <- rep(qa1, each = 21)
 df$P2 <- rep(qa2, each = 21)
 df$P3 <- rep(qa3, each = 21)
 
-# Add column with correct answer for type 1
+# Add column with correct answer for condition 1 (math)
 ca <- c(1, 3, 2, 4, 3)
 df$CorrectAnswer <- ifelse(df$Question <= 5, rep(ca, each=21), NA)
 
@@ -191,19 +207,7 @@ df$AgeDif3 <- df$P3 - df$Age
  
 ```
 
-- plots
-
-- Formulas
-
-- Get prior
-- Define prior
-- Define model
-- Prior Predictive check
-- Build the actual model
-- Posterior Predictive check (see if the model has learnt from the data? The posterior predictive check: whether the simulated values created by following the model look similar to the values of the observed data. )
-
-- Compare models using LOO, AIC, stacking weight?
-
+Describe the participants.
 
 
 ```{r}
@@ -221,25 +225,302 @@ count(Data$Age)
 mean(Data$Age)
 sd(Data$Age)
 
+# Plot for describing participants
+# Histogram of age and gender distribution
+class(Data$Gender)
+Data$Gender <- as.factor(Data$Gender)
 
-# Ethnicity
+ggplot(Data, aes(Age, fill = Gender))+
+  geom_histogram(position = "dodge2")+
+  scale_x_continuous(breaks = c(20:30)) + 
+  xlab("Participants age and gender distribution")
 
-
-
-df$Correct <- as.factor(df$Correct)
-
-ggplot(df, aes(Question, fill = Correct)) +
-  geom_histogram()
-
+# Ethnicity and language
+count(Data$Ethnicity)
+count(Data$Language)
 
 ```
 21 participants, 11 males, 10 females, from age 20 to 30, mean age: 22.6, SD(age): 2.6.
+Of the 21 participants there were 18 Danes and 3 participants from Austria, Hungary and USA.
+18 participants ran the Danish experiment and 3 participants ran the English experiment, however, since the questions and answers were the exact same and translated to hold the same meaning, the language of the experiments are unlikely to matter.
+
 Only participants who completed the full experiment were included. 
+
+
+
+
+
+- plots
+
+- Formulas
+
+- Get prior
+- Define prior
+- Define model
+- Prior Predictive check
+- Build the actual model
+- Posterior Predictive check (see if the model has learnt from the data? The posterior predictive check: whether the simulated values created by following the model look similar to the values of the observed data. )
+
+- Compare models using LOO, AIC, stacking weight?
+ 
+
+```{r}
+#### Play with plots ####
+
+
+class(df$Gender)
+df$Gender <- as.factor(df$Gender)
+
+ 
+
+# Subset condition 2
+Condition2 <- subset(df, Question >= 6)
+
+ggplot(Condition2, aes(AgeDif1)) +
+  geom_bar() +
+  scale_x_continuous(breaks = c(-20, -10, 0, 10, 20, 30, 40))
+
+ggplot(Condition2, aes(AgeDif1, Congruency)) +
+  geom_bar(stat= "identity") +
+  scale_x_continuous(breaks = c(-20, -10, 0, 10, 20, 30, 40))
+
+ggplot(Condition2, aes(AgeDif2)) +
+  geom_bar() +
+  scale_x_continuous(breaks = c(-20, -10, 0, 10, 20, 30, 40))
+
+ggplot(Condition2, aes(AgeDif2, Congruency)) +
+  geom_bar(stat= "identity") +
+  scale_x_continuous(breaks = c(-20, -10, 0, 10, 20, 30, 40))
+
+ggplot(Condition2, aes(AgeDif3)) +
+  geom_bar() +
+  scale_x_continuous(breaks = c(-20, -10, 0, 10, 20, 30, 40))
+
+ggplot(Condition2, aes(AgeDif3, Congruency)) +
+  geom_bar(stat= "identity") +
+  scale_x_continuous(breaks = c(-20, -10, 0, 10, 20, 30, 40))
+
+
+
+# I want a plot with all the possible age differences. Then I want barplots showing congruency (how many profiles chose the same answer as the participant. If congruency is high it means that the participant chose the same answer as "many others") This plot will show fx. that congruency is high on -15 = the participants chose the same answer as profiles who were 15 years younger than themselves.
+
+# Create a dataframe with all the unique age differences
+
+uni1 <- unique(df$AgeDif1)
+uni2 <- unique(df$AgeDif2)
+uni3 <- unique(df$AgeDif3)
+
+AgeDif <- stack(Condition2, select = c(AgeDif1, AgeDif2, AgeDif3))
+AgeDif$ind <- NULL
+
+AgeDif <- unique(AgeDif)
+
+
+con1 <- ddply(Condition2,.(Correct, AgeDif1),summarize,sumcon=sum(P1con),number=length(AgeDif1))
+con2 <- ddply(Condition2,.(Correct, AgeDif2),summarize,sumcon=sum(P2con),number=length(AgeDif2))
+con3 <- ddply(Condition2,.(Correct, AgeDif3),summarize,sumcon=sum(P3con),number=length(AgeDif3))
+
+
+# Plots showing what participants mostly answered in condition 2
+class(Condition2$Question)
+Condition2$Question <- as.factor(Condition2$Question)
+
+ggplot(Condition2, aes(Answer, fill= Gender)) + 
+  geom_bar(width = 0.6) +
+  facet_wrap(Condition2$Question)
+
+
+# Plots showing the sum of congruency for each age in AgeDif
+ggplot(con1, aes(AgeDif1, sumcon)) +
+  geom_bar(stat="identity") 
+
+ggplot(con2, aes(AgeDif2, sumcon)) +
+  geom_bar(stat="identity") 
+
+ggplot(con3, aes(AgeDif3, sumcon)) +
+  geom_bar(stat="identity") 
+
+```
+
 
 ```{r}
 
 
+# Plots showing what profiles chose and what participants chose (CONDITION 2)
+
+# First subset the wanted columns from Condition2
+answers2 <- subset(Condition2, select= c("Question", "SI1", "SI2", "SI3", "Answer"))
+
+# Melt into long format
+answers2 <- melt(answers2, id = c("Question"))
+
+class(answers2$variable)
+
+# Create index variable. 0 = not participant, 1 means participant
+answers2$participant <- ifelse(answers2$variable == "Answer", 1, 0)
+
+# Change index variable into factor
+class(answers2$participant)
+answers2$participant <- as.factor(answers2$participant)
+
+# plot
+ggplot(answers2, aes(value, fill = participant))+
+  geom_bar(width = 0.6, position = "dodge2")+
+  facet_wrap(answers2$Question) 
+```
+Plots above show little conformity/tendency to choose the same as others, in condition 2.
+
+
+```{r}
+### Condition 1 ###
+
+Condition1 <- subset(df, Question <=5)
+
+
+# How many incorrect answers - 22
+count(Condition1$Correct)
+
+# How many of the incorrect answers have congruency above 1 (same answer as a profile) - 13
+colnames(Condition1)
+sum(Condition1[,14]==0 & Condition1[,24]>=1)
+
+# How many times did participants choose the same answer as a profile (congruency) - 77
+sum(Condition1[,24]>=1)
+
+
+# Plots showing what profiles chose and what participants chose (CONDITION 1)
+
+# First subset the wanted columns from Condition1
+answers1 <- subset(Condition1, select= c("Question", "SI1", "SI2", "SI3", "Answer"))
+
+# Melt into long format
+answers1 <- melt(answers1, id = c("Question"))
+
+class(answers1$variable)
+
+# Create index variable. 0 = not participant, 1 means participant
+answers1$participant <- ifelse(answers1$variable == "Answer", 1, 0)
+
+# Change index variable into factor
+class(answers1$participant)
+answers1$participant <- as.factor(answers1$participant)
+
+# plot
+ggplot(answers1, aes(value, fill = participant))+
+  geom_bar(width = 0.6, position = "dodge2")+
+  facet_wrap(answers1$Question) 
+
+
+ggplot(Condition1, aes(Question, Congruency, fill = "red"))+
+  geom_bar(stat= "identity", width = 0.6)
 
 ```
+There are 22 incorrect answers (out of 105), of those 22 incorrect answers, 13 (roughly half of them) were also chosen by profiles, which may suggest that the participant was led astray by the profiles.
+(but this is very few, only about 13,7%)
+
+
+```{r}
+
+# Create a plot that shows the range of Age differences, and how many there are of each.
+# Create a plot that shows the range of Age differences and congruency (Pcon) - high congruency means many profiles chose the same answer. And the x value of the peak shows which age/agegroup people mostly chose to conform to.
+congr21 <- subset(Condition2, select = c("AgeDif1", "AgeDif2", "AgeDif3"))
+congr21 <- congr21 %>% rowid_to_column("newID")
+congr21 <- melt(congr21, id = c("newID"), measured = c("AgeDif1", "AgeDif2", "AgeDif3"))
+congr21 <- congr21 %>% rowid_to_column("NEWID")
+
+congr22 <- subset(Condition2, select = c("P1con", "P2con", "P3con"))
+congr22 <- congr22 %>% rowid_to_column("newID")
+congr22 <- melt(congr22, id = c("newID"), measured = c("P1con", "P2con", "P3con"))
+congr22 <- congr22 %>% rowid_to_column("NEWID")
+
+congr2 <- merge(x = congr21, y = congr22, by = "NEWID")
+
+colnames(congr2)
+
+# Age difference and count
+ggplot(congr2, aes(value.x))+
+  geom_bar()+
+  xlab("Age difference")
+
+# Age difference and count (density)
+ggplot(congr2, aes(value.x))+
+  geom_density()+
+  xlab("Age difference")
+
+# Age difference and congruency (sum of pcon)
+ggplot(congr2, aes(value.x, value.y))+
+  geom_bar(stat= "identity")+
+  xlab("Age difference")+
+  ylab("Congruency")
+
+
+
+
+```
+
+
+
+
+
+
+
+
+
+```{r}
+# Create a plot that shows the range of Age differences, and how many there are of each.
+# Create a plot that shows the range of Age differences and congruency (Pcon) - high congruency means many profiles chose the same answer. And the x value of the peak shows which age/agegroup people mostly chose to conform to.
+congr11 <- subset(Condition1, select = c("AgeDif1", "AgeDif2", "AgeDif3", "Correct"))
+congr11 <- congr11 %>% rowid_to_column("newID")
+congr11 <- melt(congr11, id = c("newID", "Correct"), measured = c("AgeDif1", "AgeDif2", "AgeDif3"))
+congr11 <- congr11 %>% rowid_to_column("NEWID")
+
+congr12 <- subset(Condition1, select = c("P1con", "P2con", "P3con"))
+congr12 <- congr12 %>% rowid_to_column("newID")
+congr12 <- melt(congr12, id = c("newID"), measured = c("P1con", "P2con", "P3con"))
+congr12 <- congr12 %>% rowid_to_column("NEWID")
+
+congr1 <- merge(x = congr11, y = congr12, by = "NEWID")
+
+colnames(congr1)
+
+
+# Age difference and count
+ggplot(congr1, aes(value.x))+
+  geom_bar()+
+  xlab("Age difference")
+
+# Age difference and count (density)
+ggplot(congr1, aes(value.x))+
+  geom_density()+
+  xlab("Age difference")
+
+# Age difference and congruency (sum of pcon) #### ADD CORRECT/INCORRECT ####
+ggplot(congr1, aes(value.x, value.y))+
+  geom_bar(stat= "identity")+
+  xlab("Age difference")+
+  ylab("Congruency")
+
+# Plot showing the same as above but also whether the congruent answer was correct or incorrect
+class(congr1$Correct)
+congr1$Correct <- as.factor(congr1$Correct)
+
+ggplot(congr1, aes(value.x, value.y, fill = Correct))+
+  geom_bar(stat= "identity")+
+  xlab("Age difference")+
+  ylab("Congruency")
+
+
+# Check to see the general count/spread of ages used in the experiment
+congr10 <- subset(Condition1, select = c("P1", "P2", "P3"))
+congr10 <- congr10 %>% rowid_to_column("newID")
+congr10 <- melt(congr10, id = c("newID"), measured = c("P1", "P2", "P3"))
+congr10 <- congr10 %>% rowid_to_column("NEWID")
+
+ggplot(congr10, aes(value))+
+  geom_bar()+
+  xlab("Age difference")
+
+```
+There is one bar taller than the others, this is due to a mistake, the age 52 has been used twice in the experiment. 
 
 
