@@ -19,7 +19,7 @@ Hypothesis 2:
 
 
 
-```{r}
+```{r message=FALSE}
 # Load packages
 library(brms)
 library(tidyverse)
@@ -40,178 +40,14 @@ library(reshape2)
 
 ```
 
-# Preprocessing of data - loading data into a dataframe and adding the wanted columns/variables
-
-```{r}
-
-# Load data from Danish experiment (information from survey)
-data <- read.csv("EXAMDATA/data.csv")
-
-# Change the rownames
-data <- cbind(rownames(data), data.frame(data, row.names=NULL))
-
-# Change column names accordingly
-names(data)[1] <- "Participant"
-names(data)[2] <- "Name"
-names(data)[3] <- "Age"
-names(data)[4] <- "Ethnicity"
-names(data)[5] <- "OtherEthnicity"
-names(data)[6] <- "Gender"
-names(data)[7] <- "GenderOther"
-names(data)[8] <- "ProfileName"
-names(data)[9] <- "Experiment"
-names(data)[10] <- "TIME_start"
-names(data)[11] <- "TIME_end"
-names(data)[12] <- "TIME_total"
-names(data)[13] <- "extra"
-
-# Load data from English experiment (information from survey)
-data1 <- read.csv("EXAMDATA/data1.csv")
-
-# Change the rownames
-data1 <- cbind(rownames(data1), data.frame(data1, row.names=NULL))
-
-# Change column names accordingly
-names(data1)[1] <- "Participant"
-names(data1)[2] <- "Name"
-names(data1)[3] <- "Age"
-names(data1)[4] <- "Ethnicity"
-names(data1)[5] <- "OtherEthnicity"
-names(data1)[6] <- "Gender"
-names(data1)[7] <- "GenderOther"
-names(data1)[8] <- "ProfileName"
-names(data1)[9] <- "Experiment"
-names(data1)[10] <- "TIME_start"
-names(data1)[11] <- "TIME_end"
-names(data1)[12] <- "TIME_total"
-names(data1)[13] <- "extra"
-
-# Use rbind() to unite the datasets into one
-Data <- rbind(data, data1)
-
-# Choose only the relevant variables (we also take the TIME_total column to remove incomplete data afterwards)
-Data <- subset(Data, select = c(Participant, Name, Age, Ethnicity, OtherEthnicity, Gender, Experiment, TIME_total))
-
-# Remove participants who did not complete the experiment
-Data <- Data[complete.cases(Data), ]
-
-# Remove Christin Stephanie (the same participant ran the experiment twice) 
-Data <- subset(Data, Name!=" Christin Stephanie" )
-
-# Remove participants younger or older than 18-30 
-Data <- Data %>% 
-  filter(
-    Age >= 18 & Age <= 30
-    )
-
-# Remove the TIME_total column and remove names for anonymity
-Data$TIME_total <- NULL
-Data$Name <- NULL
-
-# Fill in Ethnicity (1 = Denmark) and remove OtherEthnicity
-Data$Ethnicity <- ifelse(Data$Ethnicity == 1, "Denmark", Data$OtherEthnicity)
-
-
-# Add column with experiment language
-Data$Language <- ifelse(grepl("D", Data$Experiment), "Danish", "English")
-
-# Change gender to factor and change them into 1 = male, 0 = female
-class(Data$Gender)
-Data$Gender <- as.factor(Data$Gender)
-Data$Gender <- ifelse(Data$Gender==2,0,1)
-
-# Now load the txt files (data of experiment)
-files = list.files(pattern = "*.txt")
-
-DT <- rbindlist(sapply(files, fread, simplify = FALSE),
-                use.names = TRUE, idcol = "FileName")
-
-# Change column names
-colnames(DT) <- c("Participant", "Question", "extra", "extra2", "Answer")
-
-# Remove columns I do not need
-DT$extra <- NULL
-DT$extra2 <- NULL
-
-# Merge dataframes to one
-df <- merge(Data, DT, by.x = "Experiment", by.y = "Participant")
-
-# Remove participant variable - it is not needed
-df$Participant <- NULL
-
-#Add column called ID
-df$ID <- rep(1:21, each=10)
-
-
-# Change string in Question to numbers
-df$Question <- ifelse(df$Question == "one", 1 , ifelse(df$Question == "two", 2, ifelse(df$Question == "three", 3, ifelse(df$Question == "four", 4, ifelse(df$Question == "five", 5, ifelse(df$Question == "six", 6, ifelse(df$Question == "seven", 7, ifelse(df$Question == "eight", 8, ifelse(df$Question == "nine", 9, ifelse(df$Question == "ten", 10, 0)))))))))) 
-
-# Change row order of Questions
-df <- arrange(df, Question)   
-
-
-# Remove OtherEthnicity
-df$OtherEthnicity <- NULL
-
-# Add column with condition (type of question - 1 = math, 2 = scenario)
-df$Condition <- ifelse(df$Question >= 6, 2, 1)
-
-# Add columns with ages of other profiles for each question
-qa1 <- c(15, 52, 52, 59, 50, 39, 36, 28, 16, 20)
-qa2 <- c(29, 46, 48, 43, 21, 33, 14, 31, 57, 49)
-qa3 <- c(23, 13, 26, 54, 35, 22, 44, 54, 17, 37)
-
-df$P1 <- rep(qa1, each = 21)
-df$P2 <- rep(qa2, each = 21)
-df$P3 <- rep(qa3, each = 21)
-
-# Add column with correct answer for condition 1 (math)
-ca <- c(1, 3, 2, 4, 3)
-df$CorrectAnswer <- ifelse(df$Question <= 5, rep(ca, each=21), NA)
-
-# Add column with value of 0 if participant was incorrect and 1 if correct
-df$Correct <- ifelse(df$Answer == df$CorrectAnswer, 1, 0)
-
-# Add column with social influence from profiles (what other profiles chose)
-si1 <- c(1, 1, 2, 3, 1, 1, 4, 2, 4, 2)
-si2 <- c(1, 3, 2, 3, 3, 1, 2, 3, 3, 3)
-si3 <- c(1, 3, 4, 3, 1, 2, 4, 1, 4, 2)
-
-df$SI1 <- rep(si1, each = 21)
-df$SI2 <- rep(si2, each = 21)
-df$SI3 <- rep(si3, each = 21)
-
-# Add column to indicate whether profile was correct
-pcor1 <- c(1, 0, 1, 0, 0)
-pcor2 <- c(1, 1, 1, 0, 1)
-pcor3 <- c(1, 1, 0, 0, 0)
-
-df$P1cor <- ifelse(df$Question <= 5, rep(pcor1, each=21), NA)
-df$P2cor <- ifelse(df$Question <= 5, rep(pcor2, each=21), NA)
-df$P3cor <- ifelse(df$Question <= 5, rep(pcor3, each=21), NA)
-
-# Add column with Pncon to indicate whether the profiles answered the same as participant
-df$P1con <- ifelse(df$Answer == df$SI1, 1, 0)
-df$P2con <- ifelse(df$Answer == df$SI2, 1, 0)
-df$P3con <- ifelse(df$Answer == df$SI3, 1, 0)
-
-# Add column to indicate "congruency" (how many profiles answered the same as the particpant)
-df$Congruency <- df$P1con + df$P2con + df$P3con
-
-# Add column with age difference between the participant and the profiles
-df$AgeDif1 <- df$P1 - df$Age
-df$AgeDif2 <- df$P2 - df$Age
-df$AgeDif3 <- df$P3 - df$Age
-
-## Now the dataset is finished and contains all the variables I need ##
- 
-```
-
 Describe the participants.
 
 
 ```{r}
 
+# Load datafiles
+df <- read.csv("full_dataset.csv", header = TRUE)
+Data <- read.csv("survey_data.csv", header = TRUE)
 # Descriptive analysis of participants
 
 # How many participants? - 21
@@ -229,6 +65,10 @@ sd(Data$Age)
 # Histogram of age and gender distribution
 class(Data$Gender)
 Data$Gender <- as.factor(Data$Gender)
+
+class(df$Gender)
+df$Gender <- as.factor(df$Gender)
+
 
 ggplot(Data, aes(Age, fill = Gender))+
   geom_histogram(position = "dodge2")+
@@ -249,127 +89,9 @@ Only participants who completed the full experiment were included.
 
 
 
+# Play with plots #
 
-- plots
-
-- Formulas
-
-- Get prior
-- Define prior
-- Define model
-- Prior Predictive check
-- Build the actual model
-- Posterior Predictive check (see if the model has learnt from the data? The posterior predictive check: whether the simulated values created by following the model look similar to the values of the observed data. )
-
-- Compare models using LOO, AIC, stacking weight?
- 
-
-```{r}
-#### Play with plots ####
-
-
-class(df$Gender)
-df$Gender <- as.factor(df$Gender)
-
- 
-
-# Subset condition 2
-Condition2 <- subset(df, Question >= 6)
-
-ggplot(Condition2, aes(AgeDif1)) +
-  geom_bar() +
-  scale_x_continuous(breaks = c(-20, -10, 0, 10, 20, 30, 40))
-
-ggplot(Condition2, aes(AgeDif1, Congruency)) +
-  geom_bar(stat= "identity") +
-  scale_x_continuous(breaks = c(-20, -10, 0, 10, 20, 30, 40))
-
-ggplot(Condition2, aes(AgeDif2)) +
-  geom_bar() +
-  scale_x_continuous(breaks = c(-20, -10, 0, 10, 20, 30, 40))
-
-ggplot(Condition2, aes(AgeDif2, Congruency)) +
-  geom_bar(stat= "identity") +
-  scale_x_continuous(breaks = c(-20, -10, 0, 10, 20, 30, 40))
-
-ggplot(Condition2, aes(AgeDif3)) +
-  geom_bar() +
-  scale_x_continuous(breaks = c(-20, -10, 0, 10, 20, 30, 40))
-
-ggplot(Condition2, aes(AgeDif3, Congruency)) +
-  geom_bar(stat= "identity") +
-  scale_x_continuous(breaks = c(-20, -10, 0, 10, 20, 30, 40))
-
-
-
-# I want a plot with all the possible age differences. Then I want barplots showing congruency (how many profiles chose the same answer as the participant. If congruency is high it means that the participant chose the same answer as "many others") This plot will show fx. that congruency is high on -15 = the participants chose the same answer as profiles who were 15 years younger than themselves.
-
-# Create a dataframe with all the unique age differences
-
-uni1 <- unique(df$AgeDif1)
-uni2 <- unique(df$AgeDif2)
-uni3 <- unique(df$AgeDif3)
-
-AgeDif <- stack(Condition2, select = c(AgeDif1, AgeDif2, AgeDif3))
-AgeDif$ind <- NULL
-
-AgeDif <- unique(AgeDif)
-
-
-con1 <- ddply(Condition2,.(Correct, AgeDif1),summarize,sumcon=sum(P1con),number=length(AgeDif1))
-con2 <- ddply(Condition2,.(Correct, AgeDif2),summarize,sumcon=sum(P2con),number=length(AgeDif2))
-con3 <- ddply(Condition2,.(Correct, AgeDif3),summarize,sumcon=sum(P3con),number=length(AgeDif3))
-
-
-# Plots showing what participants mostly answered in condition 2
-class(Condition2$Question)
-Condition2$Question <- as.factor(Condition2$Question)
-
-ggplot(Condition2, aes(Answer, fill= Gender)) + 
-  geom_bar(width = 0.6) +
-  facet_wrap(Condition2$Question)
-
-
-# Plots showing the sum of congruency for each age in AgeDif
-ggplot(con1, aes(AgeDif1, sumcon)) +
-  geom_bar(stat="identity") 
-
-ggplot(con2, aes(AgeDif2, sumcon)) +
-  geom_bar(stat="identity") 
-
-ggplot(con3, aes(AgeDif3, sumcon)) +
-  geom_bar(stat="identity") 
-
-```
-
-
-```{r}
-
-
-# Plots showing what profiles chose and what participants chose (CONDITION 2)
-
-# First subset the wanted columns from Condition2
-answers2 <- subset(Condition2, select= c("Question", "SI1", "SI2", "SI3", "Answer"))
-
-# Melt into long format
-answers2 <- melt(answers2, id = c("Question"))
-
-class(answers2$variable)
-
-# Create index variable. 0 = not participant, 1 means participant
-answers2$participant <- ifelse(answers2$variable == "Answer", 1, 0)
-
-# Change index variable into factor
-class(answers2$participant)
-answers2$participant <- as.factor(answers2$participant)
-
-# plot
-ggplot(answers2, aes(value, fill = participant))+
-  geom_bar(width = 0.6, position = "dodge2")+
-  facet_wrap(answers2$Question) 
-```
-Plots above show little conformity/tendency to choose the same as others, in condition 2.
-
+## Condition 1
 
 ```{r}
 ### Condition 1 ###
@@ -387,7 +109,66 @@ sum(Condition1[,14]==0 & Condition1[,24]>=1)
 # How many times did participants choose the same answer as a profile (congruency) - 77
 sum(Condition1[,24]>=1)
 
+```
+There are 22 incorrect answers (out of 105), of those 22 incorrect answers, 13 (roughly half of them) were also chosen by profiles, which may suggest that the participant was led astray by the profiles.
+(but this is very few, only about 13,7%)
 
+```{r}
+# Plots showing Age difference and congruency
+ggplot(Condition1, aes(AgeDif1)) +
+  geom_bar() +
+  scale_x_continuous(breaks = c(-20, -10, 0, 10, 20, 30, 40))
+
+ggplot(Condition1, aes(AgeDif1, Congruency)) +
+  geom_bar(stat= "identity") +
+  scale_x_continuous(breaks = c(-20, -10, 0, 10, 20, 30, 40))
+
+ggplot(Condition1, aes(AgeDif2)) +
+  geom_bar() +
+  scale_x_continuous(breaks = c(-20, -10, 0, 10, 20, 30, 40))
+
+ggplot(Condition1, aes(AgeDif2, Congruency)) +
+  geom_bar(stat= "identity") +
+  scale_x_continuous(breaks = c(-20, -10, 0, 10, 20, 30, 40))
+
+ggplot(Condition1, aes(AgeDif3)) +
+  geom_bar() +
+  scale_x_continuous(breaks = c(-20, -10, 0, 10, 20, 30, 40))
+
+ggplot(Condition1, aes(AgeDif3, Congruency)) +
+  geom_bar(stat= "identity") +
+  scale_x_continuous(breaks = c(-20, -10, 0, 10, 20, 30, 40))
+
+```
+
+
+```{r}
+# Create a dataframe with all the unique age differences
+
+con11 <- ddply(Condition1,.(Correct, AgeDif1),summarize,sumcon=sum(P1con),number=length(AgeDif1))
+con12 <- ddply(Condition1,.(Correct, AgeDif2),summarize,sumcon=sum(P2con),number=length(AgeDif2))
+con13 <- ddply(Condition1,.(Correct, AgeDif3),summarize,sumcon=sum(P3con),number=length(AgeDif3))
+
+
+# Plots showing what participants mostly answered in condition 2
+class(Condition1$Question)
+Condition1$Question <- as.factor(Condition1$Question)
+
+
+# Plots showing the sum of congruency for each age in AgeDif
+ggplot(con11, aes(AgeDif1, sumcon)) +
+  geom_bar(stat="identity") 
+
+ggplot(con12, aes(AgeDif2, sumcon)) +
+  geom_bar(stat="identity") 
+
+ggplot(con13, aes(AgeDif3, sumcon)) +
+  geom_bar(stat="identity") 
+```
+
+
+
+```{r}
 # Plots showing what profiles chose and what participants chose (CONDITION 1)
 
 # First subset the wanted columns from Condition1
@@ -411,62 +192,12 @@ ggplot(answers1, aes(value, fill = participant))+
   facet_wrap(answers1$Question) 
 
 
-ggplot(Condition1, aes(Question, Congruency, fill = "red"))+
-  geom_bar(stat= "identity", width = 0.6)
-
-```
-There are 22 incorrect answers (out of 105), of those 22 incorrect answers, 13 (roughly half of them) were also chosen by profiles, which may suggest that the participant was led astray by the profiles.
-(but this is very few, only about 13,7%)
-
-
-```{r}
-
-# Create a plot that shows the range of Age differences, and how many there are of each.
-# Create a plot that shows the range of Age differences and congruency (Pcon) - high congruency means many profiles chose the same answer. And the x value of the peak shows which age/agegroup people mostly chose to conform to.
-congr21 <- subset(Condition2, select = c("AgeDif1", "AgeDif2", "AgeDif3"))
-congr21 <- congr21 %>% rowid_to_column("newID")
-congr21 <- melt(congr21, id = c("newID"), measured = c("AgeDif1", "AgeDif2", "AgeDif3"))
-congr21 <- congr21 %>% rowid_to_column("NEWID")
-
-congr22 <- subset(Condition2, select = c("P1con", "P2con", "P3con"))
-congr22 <- congr22 %>% rowid_to_column("newID")
-congr22 <- melt(congr22, id = c("newID"), measured = c("P1con", "P2con", "P3con"))
-congr22 <- congr22 %>% rowid_to_column("NEWID")
-
-congr2 <- merge(x = congr21, y = congr22, by = "NEWID")
-
-colnames(congr2)
-
-# Age difference and count
-ggplot(congr2, aes(value.x))+
-  geom_bar()+
-  xlab("Age difference")
-
-# Age difference and count (density)
-ggplot(congr2, aes(value.x))+
-  geom_density()+
-  xlab("Age difference")
-
-# Age difference and congruency (sum of pcon)
-ggplot(congr2, aes(value.x, value.y))+
-  geom_bar(stat= "identity")+
-  xlab("Age difference")+
-  ylab("Congruency")
-
-
-
 
 ```
 
 
-
-
-
-
-
-
-
 ```{r}
+
 # Create a plot that shows the range of Age differences, and how many there are of each.
 # Create a plot that shows the range of Age differences and congruency (Pcon) - high congruency means many profiles chose the same answer. And the x value of the peak shows which age/agegroup people mostly chose to conform to.
 congr11 <- subset(Condition1, select = c("AgeDif1", "AgeDif2", "AgeDif3", "Correct"))
@@ -518,9 +249,803 @@ congr10 <- congr10 %>% rowid_to_column("NEWID")
 
 ggplot(congr10, aes(value))+
   geom_bar()+
-  xlab("Age difference")
+  xlab("Age of profiles")
 
 ```
-There is one bar taller than the others, this is due to a mistake, the age 52 has been used twice in the experiment. 
+There is one bar taller than the others, this is due to a mistake; the age 52 has been used twice in the experiment. 
 
+
+# Check the distribution of incorrect answers
+```{r}
+# Start with a plot of 
+
+incorrect <- subset(Condition1, Correct == 0)
+
+
+congrinc1 <- subset(incorrect, select = c("AgeDif1", "AgeDif2", "AgeDif3", "Correct"))
+congrinc1 <- congrinc1 %>% rowid_to_column("newID")
+congrinc1 <- melt(congrinc1, id = c("newID", "Correct"), measured = c("AgeDif1", "AgeDif2", "AgeDif3"))
+congrinc1 <- congrinc1 %>% rowid_to_column("NEWID")
+
+congrinc2 <- subset(incorrect, select = c("P1con", "P2con", "P3con"))
+congrinc2 <- congrinc2 %>% rowid_to_column("newID")
+congrinc2 <- melt(congrinc2, id = c("newID"), measured = c("P1con", "P2con", "P3con"))
+congrinc2 <- congrinc2 %>% rowid_to_column("NEWID")
+
+congrinc <- merge(x = congrinc1, y = congrinc2, by = "NEWID")
+
+
+
+# Age difference and count
+ggplot(congrinc, aes(value.x))+
+  geom_bar()+
+  xlab("Age difference") 
+
+# Age difference and count (density)
+ggplot(congrinc, aes(value.x))+
+  geom_density()+
+  xlab("Age difference")
+
+# Age difference and congruency (sum of pcon) #### ADD CORRECT/INCORRECT ####
+ggplot(congrinc, aes(value.x, value.y))+
+  geom_bar(stat= "identity")+
+  xlab("Age difference")+
+  ylab("Congruency")
+
+
+```
+
+
+## Condition 2
+```{r}
+### Condition 2 ###
+
+# Subset condition 2
+Condition2 <- subset(df, Question >= 6)
+
+ggplot(Condition2, aes(AgeDif1)) +
+  geom_bar() +
+  scale_x_continuous(breaks = c(-20, -10, 0, 10, 20, 30, 40))
+
+ggplot(Condition2, aes(AgeDif1, Congruency)) +
+  geom_bar(stat= "identity") +
+  scale_x_continuous(breaks = c(-20, -10, 0, 10, 20, 30, 40))
+
+ggplot(Condition2, aes(AgeDif2)) +
+  geom_bar() +
+  scale_x_continuous(breaks = c(-20, -10, 0, 10, 20, 30, 40))
+
+ggplot(Condition2, aes(AgeDif2, Congruency)) +
+  geom_bar(stat= "identity") +
+  scale_x_continuous(breaks = c(-20, -10, 0, 10, 20, 30, 40))
+
+ggplot(Condition2, aes(AgeDif3)) +
+  geom_bar() +
+  scale_x_continuous(breaks = c(-20, -10, 0, 10, 20, 30, 40))
+
+ggplot(Condition2, aes(AgeDif3, Congruency)) +
+  geom_bar(stat= "identity") +
+  scale_x_continuous(breaks = c(-20, -10, 0, 10, 20, 30, 40))
+
+
+
+```
+
+
+```{r}
+
+# Create a dataframe with all the unique age differences
+
+con1 <- ddply(Condition2,.(Correct, AgeDif1),summarize,sumcon=sum(P1con),number=length(AgeDif1))
+con2 <- ddply(Condition2,.(Correct, AgeDif2),summarize,sumcon=sum(P2con),number=length(AgeDif2))
+con3 <- ddply(Condition2,.(Correct, AgeDif3),summarize,sumcon=sum(P3con),number=length(AgeDif3))
+
+
+# Plots showing what participants mostly answered in condition 2
+class(Condition2$Question)
+Condition2$Question <- as.factor(Condition2$Question)
+
+
+
+
+# Plots showing the sum of congruency for each age in AgeDif
+ggplot(con1, aes(AgeDif1, sumcon)) +
+  geom_bar(stat="identity") 
+
+ggplot(con2, aes(AgeDif2, sumcon)) +
+  geom_bar(stat="identity") 
+
+ggplot(con3, aes(AgeDif3, sumcon)) +
+  geom_bar(stat="identity") 
+
+```
+
+
+```{r}
+
+
+# Plots showing what profiles chose and what participants chose (CONDITION 2)
+
+# First subset the wanted columns from Condition2
+answers2 <- subset(Condition2, select= c("Question", "SI1", "SI2", "SI3", "Answer"))
+
+# Melt into long format
+answers2 <- melt(answers2, id = c("Question"))
+
+class(answers2$variable)
+
+# Create index variable. 0 = not participant, 1 means participant
+answers2$participant <- ifelse(answers2$variable == "Answer", 1, 0)
+
+# Change index variable into factor
+class(answers2$participant)
+answers2$participant <- as.factor(answers2$participant)
+
+# plot
+ggplot(answers2, aes(value, fill = participant))+
+  geom_bar(width = 0.6, position = "dodge2")+
+  facet_wrap(answers2$Question) 
+```
+Plots above show little conformity/tendency to choose the same as others, in condition 2.
+
+
+
+
+```{r}
+
+congr21 <- subset(Condition2, select = c("AgeDif1", "AgeDif2", "AgeDif3"))
+congr21 <- congr21 %>% rowid_to_column("newID")
+congr21 <- melt(congr21, id = c("newID"), measured = c("AgeDif1", "AgeDif2", "AgeDif3"))
+congr21 <- congr21 %>% rowid_to_column("NEWID")
+
+congr22 <- subset(Condition2, select = c("P1con", "P2con", "P3con"))
+congr22 <- congr22 %>% rowid_to_column("newID")
+congr22 <- melt(congr22, id = c("newID"), measured = c("P1con", "P2con", "P3con"))
+congr22 <- congr22 %>% rowid_to_column("NEWID")
+
+congr2 <- merge(x = congr21, y = congr22, by = "NEWID")
+
+colnames(congr2)
+
+# Age difference and count
+ggplot(congr2, aes(value.x))+
+  geom_bar()+
+  xlab("Age difference")
+
+# Age difference and count (density)
+ggplot(congr2, aes(value.x))+
+  geom_density()+
+  xlab("Age difference")
+
+# Age difference and congruency (sum of pcon)
+ggplot(congr2, aes(value.x, value.y))+
+  geom_bar(stat= "identity")+
+  xlab("Age difference")+
+  ylab("Congruency")
+
+
+# Check to see the general count/spread of ages used in the experiment
+congr20 <- subset(Condition2, select = c("P1", "P2", "P3"))
+congr20 <- congr20 %>% rowid_to_column("newID")
+congr20 <- melt(congr20, id = c("newID"), measured = c("P1", "P2", "P3"))
+congr20 <- congr20 %>% rowid_to_column("NEWID")
+
+ggplot(congr20, aes(value))+
+  geom_bar()+
+  xlab("Age of profiles")
+
+
+```
+
+
+
+
+
+
+
+
+
+
+### Statistical analysis of condition 1 ###
+
+```{r}
+# Start with a plot to see what outcome ~ predictor looks like
+
+ggplot(congr1, aes(value.x, value.y))+
+  geom_smooth()+
+  xlab("Age difference")+
+  ylab("Congruency")
+
+ggplot(congr1, aes(value.x, value.y))+
+  geom_bar(stat = "identity")+
+  xlab("Age difference")+
+  ylab("Congruency")
+
+
+```
+
+
+```{r}
+# The variables above cannot be used as they are, they need a bit more work
+
+x1 <- subset(Condition1, select = c("ID", "Question", "CorrectAnswer", "SI1", "SI2", "SI3"))
+
+x2 <- subset(Condition1, select = c("ID", "Question", "CorrectAnswer", "AgeDif1", "AgeDif2", "AgeDif3"))
+
+x3 <- subset(Condition1, select = c("ID", "P1con", "P2con", "P3con"))
+
+x1 <- melt(x1, id = c("ID", "Question", "CorrectAnswer"), measured = c("SI1", "SI2", "SI3"))
+x1 <- x1 %>% rowid_to_column("X")
+
+x2 <- melt(x2, id = c("ID", "Question", "CorrectAnswer"), measured = c("AgeDif1", "AgeDif2", "AgeDif3"))
+x2 <- x2 %>% rowid_to_column("X")
+
+x3 <- melt(x3, id = c("ID"), measured = c("P1con", "P2con", "P3con"))
+x3 <- x3 %>% rowid_to_column("X")
+
+x <- full_join(x1, x2, by = "X")
+x <- full_join(x, x3, by = "X")
+
+# Make column with difficulty score (question 1,2,3 = 2, question 4 = 1, question 5 = 3)
+x$Diff <- ifelse(x$Question.x == 1 | x$Question.x == 2 | x$Question.x == 3, 2, ifelse(x$Question.x == 4, 1, 3))
+
+colnames(x) <- c("X", "ID.x", "Question", "CorrectAnswer", "SI_ind", "SI", "ID.y", "Question.y", "CorrectAnswer.y", "AgeDif_ind", "AgeDif", "ID", "Pcon_ind", "Pcon", "Diff")
+
+###############################
+
+# The variables above cannot be used as they are, they need a bit more work
+
+con_1 <- ddply(Condition1,.(Question, AgeDif1, SI1),summarize,sumcon=sum(P1con),occurAge=length(AgeDif1), occurQ=length(Question))
+con_2 <- ddply(Condition1,.(Question, AgeDif2, SI2),summarize,sumcon=sum(P2con),occurAge=length(AgeDif2), occurQ=length(Question))
+con_3 <- ddply(Condition1,.(Question, AgeDif3, SI3),summarize,sumcon=sum(P3con),occurAge=length(AgeDif3), occurQ=length(Question))
+
+
+Con1 <- full_join(con_1, con_2, by = c("AgeDif1" = "AgeDif2"))
+Con1 <- full_join(Con1, con_3, by = c("AgeDif1" = "AgeDif3"))
+
+Con1 <- subset(Con1, select = c("AgeDif1", "Question.x", "Question.y", "Question", "SI1", "SI2", "SI3", "sumcon.x", "sumcon.y", "sumcon"))
+
+
+
+
+# If this column includes NA, make it a 0
+Con1$sumcon.x <- ifelse(is.na(Con1$sumcon.x), 0, Con1$sumcon.x)
+Con1$sumcon.y <- ifelse(is.na(Con1$sumcon.y), 0, Con1$sumcon.y)
+Con1$sumcon <- ifelse(is.na(Con1$sumcon), 0, Con1$sumcon)
+
+Con1$sumcon <- Con1$sumcon.x + Con1$sumcon.y + Con1$sumcon
+
+sum(Con1$sumcon) # It adds up as it should
+
+# Do the same with Question
+
+Con1$Question.x <- ifelse(is.na(Con1$Question.x), 0, Con1$Question.x)
+Con1$Question.y <- ifelse(is.na(Con1$Question.y), 0, Con1$Question.y)
+Con1$Question <- ifelse(is.na(Con1$Question), 0, Con1$Question)
+
+Con1$Question.x <- ifelse(Con1$Question.x == 0, Con1$Question.y, Con1$Question.x)
+Con1$Question.x <- ifelse(Con1$Question.x == 0, Con1$Question, Con1$Question.x)
+
+Con1$Question <- NULL
+Con1$Question.y <- NULL
+
+Con1$sumcon.x <- ifelse(Con1$sumcon.x == 0, Con1$sumcon.y, Con1$sumcon.x)
+Con1$sumcon.x <- ifelse(Con1$sumcon.x == 0, Con1$sumcon, Con1$sumcon.x)
+
+Con1$sumcon <- NULL
+Con1$sumcon.y <- NULL
+
+# Fill in the SI manually (don't have time for fancy coding)
+Con1$SI1 <- ifelse(Con1$Question.x == 1, 1, ifelse(Con1$Question.x == 2, 1, ifelse(Con1$Question.x == 3, 2, ifelse(Con1$Question.x == 4, 3, 1))))
+
+Con1$SI2 <- ifelse(Con1$Question.x == 1, 1, ifelse(Con1$Question.x == 2, 3, ifelse(Con1$Question.x == 3, 2, ifelse(Con1$Question.x == 4, 3, 3))))
+
+Con1$SI3 <- ifelse(Con1$Question.x == 1, 1, ifelse(Con1$Question.x == 2, 3, ifelse(Con1$Question.x == 3, 4, ifelse(Con1$Question.x == 4, 3, 1))))
+
+# Stack SI on top of each other
+Con1 <- melt(Con1, id = c("AgeDif1", "Question.x", "sumcon.x"), measured = c("SI1", "SI2", "SI3"))
+
+Con1$SI <- Con1$value
+Con1$value <- NULL
+
+# Add CorrectAnswer column
+
+Con1$CorrectAnswer <- ifelse(Con1$Question.x == 1, 1, ifelse(Con1$Question.x == 2, 3, ifelse(Con1$Question.x == 3, 2, ifelse(Con1$Question.x == 4, 4, 3))))
+
+# Add Difficulty column
+Con1$Diff <- ifelse(Con1$Question.x == 1 | Con1$Question.x == 2 | Con1$Question.x == 3, 2, ifelse(Con1$Question.x == 4, 1, 3))
+```
+
+
+```{r}
+# Define formula
+formula_1 <- bf(sumcon.x ~ AgeDif1 + SI * CorrectAnswer * Diff + (1|Question.x) )
+  
+get_prior(formula_1, Con1, family = gaussian)
+  
+# Define prior
+prior0 <- c(
+  prior(normal(0, .3), class = b, coef = "AgeDif1"),
+  prior(normal(0, .3), class = b, coef = "CorrectAnswer"),
+  prior(normal(0, .3), class = b, coef = "CorrectAnswer:Diff"),
+  prior(normal(0, .3), class = b, coef = "Diff"),
+  prior(normal(0, .3), class = b, coef = "SI"),
+  prior(normal(0, .3), class = b, coef = "SI:CorrectAnswer"),
+  prior(normal(0, .3), class = b, coef = "SI:CorrectAnswer:Diff"),
+  prior(normal(0, .3), class = b, coef = "SI:Diff"),
+  prior(student_t(3, 1, 2.5), class = Intercept),
+  prior(student_t(3, 0, 2.5), class = sd, group = "Question.x"),
+  prior(student_t(3, 0, 2.5), class = sd, coef = "Intercept", group = "Question.x"),
+  prior(student_t(3, 0, 2.5), class = sigma)
+)
+
+# Test the prior on a model 
+model0 <- brm(
+  formula_1,
+  data = Con1,
+  family = gaussian,
+  prior = prior0,
+  sample_prior = "only"
+)
+
+# Prior predictive check
+pp_check(model0, nsamples = 100)
+
+# Build the actual model
+Model0 <- brm(
+  formula_1,
+  data = Con1,
+  family = gaussian,
+  prior = prior0,
+  sample_prior = T,
+  chains = 2,
+  cores = 2,
+  control = list(adapt_delta = 0.9)
+)
+
+# Posterior predictive check
+pp_check(Model0, nsamples = 100)
+
+summary(Model0)
+
+```
+First attempt. We try again. 
+We can see that the distribution is multimodal (bimodal without the details), I will therefore try again with a mixture model.
+
+```{r}
+mix <- mixture(gaussian, gaussian, order = "mu")
+
+get_prior(formula_1, Con1, family = mix)
+
+#### TRIED (0, .1) BUT HAD MANY ISSUES, THEREFORE I TRIED A STRONGER PRIOR
+prior_1 <- c(
+  prior(student_t(3, 0, 2.5), class = sigma1),
+  prior(student_t(3, 0, 2.5), class = sigma2),
+  prior(dirichlet(1), class = theta),
+  prior(normal(0, .3), class = b, coef = "AgeDif1", dpar = mu1),
+  prior(normal(0, .3), class = b, coef = "AgeDif1", dpar = mu2),
+  prior(normal(0, .3), class = b, coef = "CorrectAnswer", dpar = mu1),
+  prior(normal(0, .3), class = b, coef = "CorrectAnswer", dpar = mu2),
+  prior(normal(0, .3), class = b, coef = "CorrectAnswer:Diff", dpar = mu1),
+  prior(normal(0, .3), class = b, coef = "CorrectAnswer:Diff", dpar = mu2),
+  prior(normal(0, .3), class = b, coef = "Diff", dpar = mu1),
+  prior(normal(0, .3), class = b, coef = "Diff", dpar = mu2),
+  prior(normal(0, .3), class = b, coef = "SI", dpar = mu1),
+  prior(normal(0, .3), class = b, coef = "SI", dpar = mu2),
+  prior(normal(0, .3), class = b, coef = "SI:CorrectAnswer", dpar = mu1),
+  prior(normal(0, .3), class = b, coef = "SI:CorrectAnswer", dpar = mu2),
+  prior(normal(0, .3), class = b, coef = "SI:CorrectAnswer:Diff", dpar = mu1),
+  prior(normal(0, .3), class = b, coef = "SI:CorrectAnswer:Diff", dpar = mu2),
+  prior(normal(0, .3), class = b, coef = "SI:Diff", dpar = mu1),
+  prior(normal(0, .3), class = b, coef = "SI:Diff", dpar = mu2),
+  prior(student_t(3, 1, 2.5), class = Intercept, dpar = mu1),
+  prior(student_t(3, 3, 2.5), class = Intercept, dpar = mu2),
+  prior(student_t(3, 0, 2.5), class = sd, dpar = mu1),
+  prior(student_t(3, 0, 2.5), class = sd, dpar = mu2)
+)
+
+
+# Test the prior on a model 
+model_1 <- brm(
+  formula_1,
+  data = Con1,
+  family = mix,
+  prior = prior_1,
+  sample_prior = "only"
+)
+
+# Prior predictive check
+pp_check(model_1, nsamples = 100)
+
+# Build the actual model
+Model_1 <- brm(
+  formula_1,
+  data = Con1,
+  family = mix,
+  prior = prior_1,
+  sample_prior = T,
+  chains = 2,
+  cores = 2,
+  control = list(adapt_delta = 0.9)
+)
+
+# Posterior predictive check
+pp_check(Model_1, nsamples = 100)
+
+summary(Model_1)
+
+```
+```{r}
+
+# Now try with a formula without Difficulty? (It was made by me anyway, maybe it has no influence, maybe the other things have influence without Diff)
+
+formula_2 <- bf(sumcon.x ~ AgeDif1 + SI * CorrectAnswer + (1|Question.x))
+
+mix <- mixture(gaussian, gaussian, order = "mu")
+
+get_prior(formula_2, Con1, family = mix)
+
+#### TRIED (0, .1) BUT HAD MANY ISSUES, THEREFORE I TRIED A STRONGER PRIOR
+prior_2 <- c(
+  prior(student_t(3, 0, 2.5), class = sigma1),
+  prior(student_t(3, 0, 2.5), class = sigma2),
+  prior(dirichlet(1), class = theta),
+  prior(normal(0, .3), class = b, coef = "AgeDif1", dpar = mu1),
+  prior(normal(0, .3), class = b, coef = "AgeDif1", dpar = mu2),
+  prior(normal(0, .3), class = b, coef = "CorrectAnswer", dpar = mu1),
+  prior(normal(0, .3), class = b, coef = "CorrectAnswer", dpar = mu2),
+  prior(normal(0, .3), class = b, coef = "SI:CorrectAnswer", dpar = mu1),
+  prior(normal(0, .3), class = b, coef = "SI:CorrectAnswer", dpar = mu2),
+  prior(normal(0, .3), class = b, coef = "SI", dpar = mu1),
+  prior(normal(0, .3), class = b, coef = "SI", dpar = mu2),
+  prior(student_t(3, 1, 2.5), class = Intercept, dpar = mu1),
+  prior(student_t(3, 3, 2.5), class = Intercept, dpar = mu2),
+  prior(student_t(3, 0, 2.5), class = sd, dpar = mu1),
+  prior(student_t(3, 0, 2.5), class = sd, dpar = mu2)
+)
+
+
+# Test the prior on a model 
+model_2 <- brm(
+  formula_2,
+  data = Con1,
+  family = mix,
+  prior = prior_2,
+  sample_prior = "only"
+)
+
+# Prior predictive check
+pp_check(model_2, nsamples = 100)
+
+# Build the actual model
+Model_2 <- brm(
+  formula_2,
+  data = Con1,
+  family = mix,
+  prior = prior_2,
+  sample_prior = T,
+  chains = 2,
+  cores = 2
+)
+
+# Posterior predictive check
+Model_1_posterior <- pp_check(Model_2, nsamples = 100)
+
+summary(Model_2)
+
+```
+Model Comparison
+```{r}
+
+loo_1 <- loo(Model_1)
+loo_2 <- loo(Model_2)
+
+print(loo_1)
+print(loo_2)
+# Model2 has lowest LOOic but large SE
+
+
+Model_1 <- add_criterion(Model_1, criterion = "loo")
+plot(loo(Model_1))
+
+Model_2 <- add_criterion(Model_2, criterion = "loo")
+plot(loo(Model_2))
+
+waic(Model_1, Model_2)
+
+
+```
+
+
+
+
+
+
+
+### Statistical analysis of condition 2 ###
+Logistic regression if the outcome is categorical
+```{r}
+
+# Start with a plot to see what outcome ~ predictor looks like
+
+ggplot(congr2, aes(value.x, value.y))+
+  geom_smooth()+
+  xlab("Age difference")+
+  ylab("Congruency")
+
+ggplot(congr2, aes(value.x, value.y))+
+  geom_bar(stat = "identity")+
+  xlab("Age difference")+
+  ylab("Congruency")
+
+
+
+```
+
+
+
+```{r}
+
+# The variables above cannot be used as they are, they need a bit more work
+
+con1 <- ddply(Condition2,.(Question, AgeDif1),summarize,sumcon=sum(P1con),occurAge=length(AgeDif1), occurQ=length(Question))
+con2 <- ddply(Condition2,.(Question, AgeDif2),summarize,sumcon=sum(P2con),occurAge=length(AgeDif2), occurQ=length(Question))
+con3 <- ddply(Condition2,.(Question, AgeDif3),summarize,sumcon=sum(P3con),occurAge=length(AgeDif3), occurQ=length(Question))
+
+
+Con <- full_join(con1, con2, by = c("AgeDif1" = "AgeDif2"))
+Con <- full_join(Con, con3, by = c("AgeDif1" = "AgeDif3"))
+
+# If this column includes NA, make it a 0
+Con$sumcon.x <- ifelse(is.na(Con$sumcon.x), 0, Con$sumcon.x)
+Con$sumcon.y <- ifelse(is.na(Con$sumcon.y), 0, Con$sumcon.y)
+Con$sumcon <- ifelse(is.na(Con$sumcon), 0, Con$sumcon)
+
+Con$sumcon <- Con$sumcon.x + Con$sumcon.y + Con$sumcon
+
+sum(Con$sumcon) # It adds up as it should
+
+# Do the same with OccurAge
+Con$occurAge.x <- ifelse(is.na(Con$occurAge.x), 0, Con$occurAge.x)
+Con$occurAge.y <- ifelse(is.na(Con$occurAge.y), 0, Con$occurAge.y)
+Con$occurAge <- ifelse(is.na(Con$occurAge), 0, Con$occurAge)
+
+Con$occurAge <- Con$occurAge.x + Con$occurAge.y + Con$occurAge
+
+# Do the same with OccurQ
+Con$occurQ.x <- ifelse(is.na(Con$occurQ.x), 0, Con$occurQ.x)
+Con$occurQ.y <- ifelse(is.na(Con$occurQ.y), 0, Con$occurQ.y)
+Con$occurQ <- ifelse(is.na(Con$occurQ), 0, Con$occurQ)
+
+Con$occurQ <- Con$occurQ.x + Con$occurQ.y + Con$occurQ
+
+# Do the same with Question
+Con$Question.x <- ifelse(is.na(Con$Question.x), 0, Con$Question.x)
+Con$Question.y <- ifelse(is.na(Con$Question.y), 0, Con$Question.y)
+Con$Question <- ifelse(is.na(Con$Question), 0, Con$Question)
+
+Con$Question <- Con$Question.x + Con$Question.y + Con$Question
+
+# Everything adds up, change name of AgeDif1
+colnames(Con)[2] <- "AgeDif"
+
+# Pick the necessary columns
+Con <- subset(Con, select = c("AgeDif", "Question", "sumcon", "occurAge", "occurQ" ))
+
+
+```
+
+
+```{r}
+
+# See what it looks like now
+ggplot(Con, aes(AgeDif, occurAge))+
+  geom_histogram(stat = "identity")+
+  xlab("Age difference")+
+  ylab("Count")
+
+
+ggplot(Con, aes(AgeDif, sumcon))+
+  geom_smooth()+
+  xlab("Age difference")+
+  ylab("Congruency")
+
+
+ggplot(Con, aes(AgeDif, sumcon))+
+  geom_bar(stat = "identity")+
+  xlab("Age difference")+
+  ylab("Congruency")
+
+```
+
+Now to the actual analysis # First attempt
+
+Create a plot that shows the range of Age differences, and how many there are of each.
+Create a plot that shows the range of Age differences and congruency (sumcon) - high congruency means many profiles chose the same answer / the participant chose the sam answer that many profiles chose. And the x value of the peak shows which age/agegroup people mostly chose to conform to.
+```{r}
+
+# Define the formula (keep it simple)
+formula <- bf(sumcon ~ AgeDif)
+
+# get prior
+get_prior(formula, Con, family = gaussian)
+
+# Define prior
+prior <- c(
+  prior(normal(0, .1), class = b),
+  prior(normal(0, .1), class = b, coef = "AgeDif"),
+  prior(student_t(3, 1, 2.5), class = Intercept),
+  prior(student_t(3, 0, 2.5), class = sigma)
+)
+
+# test prior by making a model
+model <- brm(
+  formula,
+  data = Con,
+  family = gaussian,
+  prior = prior,
+  sample_prior = "only"
+)
+
+# Prior predictive check
+pp_check(model, nsamples = 100)
+
+
+# Build the actual model
+Model <- brm(
+  formula,
+  data = Con,
+  family = gaussian(),
+  prior = prior,
+  sample_prior = T,
+  chains = 2,
+  cores = 2
+)
+
+# Posterior predictive check
+pp_check(Model, nsamples = 100)
+
+summary(Model)
+```
+This is the first attempt with a prior.
+
+```{r}
+# Try a mixture model - we can see that the actual data is bimodal, which is why the first prior did not fit well.
+
+# Define the formula (keep it simple)
+formula1 <- bf(sumcon ~ AgeDif)
+
+mix <- mixture(gaussian, gaussian, order = "mu")
+
+get_prior(formula1, Con, family = mix)
+
+
+prior1 <- c(
+  prior(student_t(3, 0, 2.5), sigma1),
+  prior(student_t(3, 0, 2.5), sigma2),
+  prior(dirichlet(1), theta),
+  prior(normal(0, .3), b, dpar = mu1),
+  prior(normal(0, .3), b, dpar = mu2),
+  prior(normal(0.5, .3), Intercept, dpar = mu1),
+  prior(normal(4, .1), Intercept, dpar = mu2)
+)
+
+# Test prior with the model
+model1 <- brm(formula1,
+              data = Con, 
+              family = mix,
+              prior = prior1,
+              sample_prior = "only",
+              chains = 2,
+              cores = 2
+)
+
+# Prior predictive check
+pp_check(model1, nsamples = 100)
+
+
+# Build the actual model
+Model1 <- brm(formula1,
+  data = Con,
+  family = mix,
+  prior = prior1,
+  sample_prior = T,
+  chains = 2
+)
+
+# Posterior predictive check
+pp_check(Model1, nsamples = 100)
+
+summary(Model1)
+```
+
+
+
+
+
+```{r}
+# Try a model with random intercept Question
+class(Con$Question)
+Con$Question <- as.factor(Con$Question)
+
+formula2 <- bf(sumcon ~ AgeDif + (1|Question))
+
+get_prior(formula2, Con, family = mix)
+
+
+prior2 <- c(
+  prior(student_t(3, 0, 2.5), sigma1),
+  prior(student_t(3, 0, 2.5), sigma2),
+  prior(dirichlet(1), theta),
+  prior(normal(0, .3), b, dpar = mu1),
+  prior(normal(0, .3), b, dpar = mu2),
+  prior(normal(0.5, .3), Intercept, dpar = mu1),
+  prior(normal(4, .1), Intercept, dpar = mu2),
+  prior(student_t(3, 0, 2.5), sd, group = "Question", dpar = mu1),
+  prior(student_t(3, 0, 2.5), sd, group = "Question", dpar = mu2),
+  prior(student_t(3, 0, 2.5), sd, coef = "Intercept", group = "Question", dpar = mu1),
+  prior(student_t(3, 0, 2.5), sd, coef = "Intercept", group = "Question", dpar = mu2)
+)
+
+# Test prior with the model
+model2 <- brm(formula2,
+              data = Con, 
+              family = mix,
+              prior = prior2,
+              sample_prior = "only",
+              chains = 2
+)
+
+# Prior predictive check
+pp_check(model2, nsamples = 100)
+
+
+# Build the actual model
+Model2 <- brm(formula2,
+  data = Con,
+  family = mix,
+  prior = prior2,
+  sample_prior = T,
+  chains = 2,
+  iter = 3000,
+  cores = 2
+)
+
+# Posterior predictive check
+pp_check(Model2, nsamples = 100)
+
+summary(Model2)
+```
+Compare Model1 and Model2
+```{r}
+plot(Model1)
+plot(Model2)
+
+
+# Using LOO
+library(loo)
+loo1 <- loo(Model1)
+loo2 <- loo(Model2)
+
+print(loo1)
+print(loo2)
+# Model2 has lowest LOOic but large SE
+
+
+Model1 <- add_criterion(Model1, criterion = "loo")
+plot(loo(Model1))
+
+Model2 <- add_criterion(Model2, criterion = "loo")
+plot(loo(Model2))
+
+waic(Model1, Model2)
+# Model2 has lowest WAIC but large SE
+```
+
+
+
+```{r}
+
+
+```
 
